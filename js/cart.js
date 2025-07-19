@@ -1,13 +1,15 @@
-import { getLocalStorage, setLocalStorage, updateCartBadgeWithAnimation } from "./utils.mjs";
+import {
+  getLocalStorage,
+  setLocalStorage,
+  updateCartBadgeWithAnimation
+} from "./utils.mjs";
 
 const imageBasePath = "../images/";
 
+// Ensure all image paths are normalized
 function fixImagePath(relativePath) {
   if (!relativePath) return "";
-  if (relativePath.startsWith("images/")) {
-    return imageBasePath + relativePath.replace(/^images\//, "");
-  }
-  return imageBasePath + relativePath.replace(/^(\.\.\/)+images\//, "");
+  return relativePath.replace(/^(\.\.\/)*images\//, imageBasePath);
 }
 
 function renderCartContents() {
@@ -19,6 +21,7 @@ function renderCartContents() {
   if (cartItems.length === 0) {
     productList.innerHTML = "<p>Your cart is empty.</p>";
     updateCartBadgeWithAnimation();
+    updateCheckoutButton();
     return;
   }
 
@@ -41,6 +44,10 @@ function renderCartContents() {
 
 function cartItemTemplate(item) {
   const productLink = `../product_pages/index.html?id=${encodeURIComponent(item.Id)}`;
+  const quantity = item.Quantity || 1;
+  const itemTotal = (item.FinalPrice * quantity).toFixed(2);
+  const colorName = item.Colors?.[0]?.ColorName || "N/A";
+
   return `
     <li class="cart-card divider">
       <a href="${productLink}" class="cart-card__image">
@@ -49,13 +56,13 @@ function cartItemTemplate(item) {
       <a href="${productLink}">
         <h2 class="card__name">${item.Name}</h2>
       </a>
-      <p class="cart-card__color">${item.Colors?.[0]?.ColorName || "N/A"}</p>
+      <p class="cart-card__color">${colorName}</p>
       <div class="cart-card__quantity">
         <button class="quantity-btn decrease-qty" data-id="${item.Id}">-</button>
-        <span>qty: ${item.Quantity || 1}</span>
+        <span data-qty-id="${item.Id}">qty: ${quantity}</span>
         <button class="quantity-btn increase-qty" data-id="${item.Id}">+</button>
       </div>
-      <p class="cart-card__price">$${(item.FinalPrice * (item.Quantity || 1)).toFixed(2)}</p>
+      <p class="cart-card__price">$${itemTotal}</p>
       <button class="remove-item" data-id="${item.Id}" aria-label="Remove ${item.Name} from cart">❌</button>
     </li>
   `;
@@ -63,14 +70,32 @@ function cartItemTemplate(item) {
 
 function removeFromCart(productId) {
   let cartItems = getLocalStorage("so-cart") || [];
-  cartItems = cartItems.filter(item => item.Id !== productId);
-  setLocalStorage("so-cart", cartItems);
-  renderCartContents();
+  const newItems = cartItems.filter(item => item.Id !== productId);
+
+  if (newItems.length !== cartItems.length) {
+    setLocalStorage("so-cart", newItems);
+    renderCartContents();
+  }
+}
+
+function updateQuantity(productId, change) {
+  let cartItems = getLocalStorage("so-cart") || [];
+  const item = cartItems.find(item => item.Id === productId);
+
+  if (item) {
+    item.Quantity = (item.Quantity || 1) + change;
+    if (item.Quantity <= 0) {
+      cartItems = cartItems.filter(i => i.Id !== productId);
+    }
+    setLocalStorage("so-cart", cartItems);
+    renderCartContents();
+    animateCartIcon();
+  }
 }
 
 function addRemoveListeners() {
-  const removeButtons = document.querySelectorAll(".remove-item");
-  removeButtons.forEach(button => {
+  const buttons = document.querySelectorAll(".remove-item");
+  buttons.forEach(button => {
     button.addEventListener("click", (e) => {
       e.preventDefault();
       const productId = e.target.dataset.id;
@@ -81,22 +106,6 @@ function addRemoveListeners() {
   });
 }
 
-function updateQuantity(productId, change) {
-  let cartItems = getLocalStorage("so-cart") || [];
-  const itemIndex = cartItems.findIndex(item => item.Id === productId);
-  if (itemIndex !== -1) {
-    cartItems[itemIndex].Quantity = (cartItems[itemIndex].Quantity || 1) + change;
-    if (cartItems[itemIndex].Quantity <= 0) {
-      cartItems.splice(itemIndex, 1);
-    }
-    setLocalStorage("so-cart", cartItems);
-    renderCartContents();
-
-    // Animate the cart icon whenever quantity changes
-    animateCartIcon();
-  }
-}
-
 function addQuantityListeners() {
   const increaseButtons = document.querySelectorAll(".increase-qty");
   const decreaseButtons = document.querySelectorAll(".decrease-qty");
@@ -104,16 +113,14 @@ function addQuantityListeners() {
   increaseButtons.forEach(button => {
     button.addEventListener("click", (e) => {
       e.preventDefault();
-      const productId = e.target.dataset.id;
-      updateQuantity(productId, 1);
+      updateQuantity(e.target.dataset.id, 1);
     });
   });
 
   decreaseButtons.forEach(button => {
     button.addEventListener("click", (e) => {
       e.preventDefault();
-      const productId = e.target.dataset.id;
-      updateQuantity(productId, -1);
+      updateQuantity(e.target.dataset.id, -1);
     });
   });
 }
@@ -122,20 +129,19 @@ function updateCheckoutButton() {
   const cartItems = getLocalStorage("so-cart") || [];
   const checkoutLink = document.querySelector("#checkout-link");
 
-  if (checkoutLink) {
-    if (cartItems.length === 0) {
-      checkoutLink.style.opacity = "0.5";
-      checkoutLink.style.pointerEvents = "none";
-      checkoutLink.textContent = "Cart Empty";
-    } else {
-      checkoutLink.style.opacity = "1";
-      checkoutLink.style.pointerEvents = "auto";
-      checkoutLink.textContent = "Proceed to Checkout";
-    }
+  if (!checkoutLink) return;
+
+  if (cartItems.length === 0) {
+    checkoutLink.style.opacity = "0.5";
+    checkoutLink.style.pointerEvents = "none";
+    checkoutLink.textContent = "Cart Empty";
+  } else {
+    checkoutLink.style.opacity = "1";
+    checkoutLink.style.pointerEvents = "auto";
+    checkoutLink.textContent = "Proceed to Checkout";
   }
 }
 
-// Animate the cart badge
 function animateCartIcon() {
   const cartIcon = document.querySelector("#cart-badge");
   if (cartIcon) {
@@ -144,6 +150,6 @@ function animateCartIcon() {
   }
 }
 
-// Initialize cart rendering
+// Initialize
 renderCartContents();
 updateCheckoutButton();
