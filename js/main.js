@@ -86,3 +86,18 @@ function initWelcomeModal() {
 // Initialize
 updateCartBadge();
 initWelcomeModal();
+import { getCartItems } from './cart.js';
+
+const cartDiv = document.querySelector('.cart');
+const items = getCartItems();
+
+if (items.length === 0) {
+  cartDiv.textContent = "Your cart is empty.";
+} else {
+  let html = "<h3>Your Cart</h3><ul>";
+  items.forEach(item => {
+    html += `<li>${item.quantity} × ${item.name} — $${(item.price * item.quantity).toFixed(2)}</li>`;
+  });
+  html += "</ul>";
+  cartDiv.innerHTML = html;
+}
