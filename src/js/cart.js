@@ -168,6 +168,16 @@ function updateCheckoutButton() {
     }
   }
 }
+if (cartItems.length === 0) {
+  productList.innerHTML = `
+    <li class="cart-empty">
+      <p>Your cart is empty. Why not <a href="../index.html">add something?</a></p>
+    </li>
+  `;
+  updateCartBadgeWithAnimation();
+  updateCheckoutButton();
+  return;
+}
 
 // Call it initially and after cart changes
 updateCheckoutButton();
